@@ -1,0 +1,26 @@
+crtsh
+
+Copyright (c) 2021, Yahe
+All rights reserved.
+
+
+description:
+============
+
+This script extracts all domain names for given domains from
+the certificate transparency logs. It uses the JSON export of
+crt.sh to read the log info and the extracts the contained
+domain values.
+
+
+usage:
+======
+
+./crtsh [--exclude-expired] <domain>*
+
+
+parameters:
+===========
+
+--exclude-expired     do not display domains that come from
+                      expired certificates

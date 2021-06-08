@@ -1,0 +1,139 @@
+#!/usr/bin/php
+<?php
+
+  # crtsh 0.1a0
+  #
+  # Copyright (c) 2021, Yahe
+  # All rights reserved.
+  #
+  #
+  # description:
+  # ============
+  #
+  # This script extracts all domain names for given domains from
+  # the certificate transparency logs. It uses the JSON export of
+  # crt.sh to read the log info and the extracts the contained
+  # domain values.
+  #
+  #
+  # usage:
+  # ======
+  #
+  # ./crtsh [--exclude-expired] <domain>*
+  #
+  #
+  # parameters:
+  # ===========
+  #
+  # --exclude-expired     do not display domains that come from
+  #                       expired certificates
+
+  define("EXCLUDE_EXPIRED", "--exclude-expired");
+  define("URL",             "https://crt.sh/?output=json&Identity=");
+  define("URL_EXPIRED",     "&exclude=expired");
+
+  function main($argv) {
+    $result = 1;
+
+    $domains        = [];
+    $excludeExpired = false;
+
+    for ($index = 1; $index < count($argv); $index++) {
+      $argv[$index] = strtolower(trim($argv[$index]));
+
+      # get rid of empty strings
+      if (0 < strlen($argv[$index])) {
+        # might be a parameter
+        if (0 === count($domains)) {
+          # check if a parameter is set
+          if (0 === strcasecmp($argv[$index], EXCLUDE_EXPIRED)) {
+            $excludeExpired = true;
+          } else {
+            $domains[] = $argv[$index];
+          }
+        } else {
+          # after the first domain there may only be domains
+          $domains[] = $argv[$index];
+        }
+      }
+    }
+
+    # we do not proceed if there was no domain
+    if (0 < count($domains)) {
+      # set default return code if nothing fails
+      $result = 0;
+
+      $names = [];
+
+      foreach ($domains as $domain) {
+        # build the URL
+        $url = URL.urlencode($domain);
+        if ($excludeExpired) {
+          $url .= URL_EXPIRED;
+        }
+
+        # read the URL
+        $json = @file_get_contents($url);
+        if (false !== $json) {
+          # decode json
+          $json = @json_decode($json, true);
+          if (is_array($json)) {
+            foreach ($json as $element) {
+              if (array_key_exists("common_name", $element)) {
+                $item = strtolower(trim($element["common_name"]));
+
+                # get rid of empty strings
+                if (0 < strlen($item)) {
+                  if (!array_key_exists($item, $names)) {
+                    $names[$item] = $item;
+                  }
+                }
+              } else {
+                # array has wrong format
+                $result = 4;
+              }
+
+              if (array_key_exists("name_value", $element)) {
+                # get single entries
+                $temp = explode("\n", $element["name_value"]);
+                if (is_array($temp)) {
+                  foreach ($temp as $item) {
+                    $item = strtolower(trim($item));
+
+                    # get rid of empty strings
+                    if (0 < strlen($item)) {
+                      if (!array_key_exists($item, $names)) {
+                        $names[$item] = $item;
+                      }
+                    }
+                  }
+                }
+              } else {
+                # array has wrong format
+                $result = 4;
+              }
+            }
+          } else {
+            #decoding json failed
+            $result = 3;
+          }
+        } else {
+          # reading a URL failed
+          $result = 2;
+        }
+      }
+
+      if (0 < count($names)) {
+        sort($names);
+
+        foreach ($names as $name) {
+          print($name."\n");
+        }
+      }
+    }
+
+    return $result;
+  }
+
+  exit(main($argv));
+
