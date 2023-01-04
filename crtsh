@@ -1,9 +1,9 @@
-#!/usr/bin/php
+#!/usr/bin/env php
 <?php
 
-  # crtsh 0.1a0
+  # crtsh 0.2a0
   #
-  # Copyright (c) 2021, Yahe
+  # Copyright (c) 2021-2023, Yahe
   # All rights reserved.
   #
   #
@@ -31,6 +31,60 @@
   define("EXCLUDE_EXPIRED", "--exclude-expired");
   define("URL",             "https://crt.sh/?output=json&Identity=");
   define("URL_EXPIRED",     "&exclude=expired");
+
+  define("COMMON_NAME", "common_name");
+  define("NAME_VALUE",  "name_value");
+
+  define("TIMEOUT", 30*60);
+
+  # calls $command, prints $stdin to its standard input and reads
+  # $stdout and $stderr from its standard output and its error output
+  function execute_with_stdio($command, $stdin, &$stdout, &$stderr) {
+    $result = false;
+
+    # specify the used descriptors
+    $descriptors = [0 => ["pipe", "r"],  # STDIN
+                    1 => ["pipe", "w"],  # STDOUT
+                    2 => ["pipe", "w"]]; # STDERR
+
+    # open the process handle
+    $handle = proc_open($command, $descriptors, $pipes);
+    if (false !== $handle) {
+      # write stdin content and close the pipe
+      if (null !== $stdin) {
+        # prevent stdio from blocking
+        #stream_set_blocking($pipes[0], false);
+
+        # write stdin in 1kb chunks to prevent blocking
+        $counter = 0;
+        while ($counter < strlen($stdin)) {
+          $write_size = strlen($stdin)-$counter;
+          if ($write_size > STREAM_BUFFER) {
+            $write_size = STREAM_BUFFER;
+          }
+
+          $bytes_written = fwrite($pipes[0], substr($stdin, $counter, $write_size));
+          fflush($pipes[0]);
+
+          $counter += $bytes_written;
+        }
+      }
+      fclose($pipes[0]);
+
+      # read stdout content and close the pipe
+      $stdout = stream_get_contents($pipes[1]);
+      fclose($pipes[1]);
+
+      # read stderr content and close the pipe
+      $stderr = stream_get_contents($pipes[2]);
+      fclose($pipes[2]);
+
+      # close the process and get the return value
+      $result = proc_close($handle);
+    }
+
+    return $result;
+  }
 
   function main($argv) {
     $result = 1;
@@ -73,14 +127,14 @@
         }
 
         # read the URL
-        $json = @file_get_contents($url);
-        if (false !== $json) {
+        $ret = execute_with_stdio("curl -fs ".escapeshellarg($url), null, $json, $stderr);
+        if (0 === $ret) {
           # decode json
-          $json = @json_decode($json, true);
+          $json = @json_decode($json, true, 512, JSON_OBJECT_AS_ARRAY);
           if (is_array($json)) {
             foreach ($json as $element) {
-              if (array_key_exists("common_name", $element)) {
-                $item = strtolower(trim($element["common_name"]));
+              if (array_key_exists(COMMON_NAME, $element)) {
+                $item = strtolower(trim($element[COMMON_NAME]));
 
                 # get rid of empty strings
                 if (0 < strlen($item)) {
@@ -93,9 +147,9 @@
                 $result = 4;
               }
 
-              if (array_key_exists("name_value", $element)) {
+              if (array_key_exists(NAME_VALUE, $element)) {
                 # get single entries
-                $temp = explode("\n", $element["name_value"]);
+                $temp = explode("\n", $element[NAME_VALUE]);
                 if (is_array($temp)) {
                   foreach ($temp as $item) {
                     $item = strtolower(trim($item));
