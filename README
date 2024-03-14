@@ -1,6 +1,6 @@
 crtsh
 
-Copyright (c) 2021, Yahe
+Copyright (c) 2021-2023, Yahe
 All rights reserved.
 
 
@@ -9,7 +9,7 @@ description:
 
 This script extracts all domain names for given domains from
 the certificate transparency logs. It uses the JSON export of
-crt.sh to read the log info and the extracts the contained
+crt.sh to read the log info and then extracts the contained
 domain values.
 
 
